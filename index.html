@@ -109,7 +109,7 @@ const KON=['Baik','Rusak Ringan','Rusak Berat'];
    [id, kode, nup, nama, merek, tahun, nilai, kondisi(0-2), kategori(0-5), lokasi, pj, ket, jumlah]
    Kondisi dan kategori disimpan sebagai angka kode, teksnya diambil dari daftar di atas. */
 let D={s:{},r:[],id:1};
-let dbRef=null,dataReady=false;
+let dbRef=null,userDataRef=null,migrationRef=null,dataReady=false;
 const $=i=>document.getElementById(i);
 const rp=n=>new Intl.NumberFormat('id-ID').format(n||0);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -117,15 +117,33 @@ let editId=null;
 
 function setDbStatus(text,error=false){$('dbStatus').textContent=text;$('dbStatus').classList.toggle('error',error)}
 function setControlsEnabled(enabled){['bAdd','bPrint','bCsv','bBak','bRes','bSet','q','fc','fk'].forEach(id=>$(id).disabled=!enabled)}
-function toCloud(){return {s:D.s,id:D.id,r:D.r.map(r=>({id:r[0],code:r[1],nup:r[2],name:r[3],brand:r[4],year:r[5],value:r[6],condition:r[7],category:r[8],location:r[9],owner:r[10],note:r[11],quantity:r[12]||1}))}}
+function toCloud(data=D){return {s:data.s,id:data.id,r:data.r.map(r=>({id:r[0],code:r[1],nup:r[2],name:r[3],brand:r[4],year:r[5],value:r[6],condition:r[7],category:r[8],location:r[9],owner:r[10],note:r[11],quantity:r[12]||1}))}}
 function fromCloud(o){return {s:o.s||{},id:o.id||1,r:(o.r||[]).map(r=>Array.isArray(r)?[...r.slice(0,12),Math.max(1,Math.floor(+r[12]||1))]:[r.id,r.code,r.nup,r.name,r.brand,r.year,r.value,+r.condition,+r.category,r.location,r.owner,r.note,Math.max(1,Math.floor(+r.quantity||1))])}}
+function mergeCloudData(target,source){
+ const existing=new Set(target.r.map(row=>String(row[1]??'')+'\u0000'+String(row[2]??'')));
+ target.id=Math.max(+target.id||1,...target.r.map(row=>(+row[0]||0)+1));
+ source.r.forEach(sourceRow=>{
+  const key=String(sourceRow[1]??'')+'\u0000'+String(sourceRow[2]??'');if(existing.has(key))return;
+  const row=[...sourceRow];row[0]=target.id++;target.r.push(row);existing.add(key);
+ });
+ if(!Object.keys(target.s||{}).length&&Object.keys(source.s||{}).length)target.s={...source.s};
+ return target;
+}
 async function loadCloud(){
- const snap=await dbRef.get();
- if(snap.exists){D=fromCloud(snap.data());return}
- const legacy=localStorage.getItem(KEY);
- if(legacy){try{const old=JSON.parse(legacy);if(old&&Array.isArray(old.r))D=fromCloud(old)}catch(e){}}
- await dbRef.set(toCloud());
- if(legacy)localStorage.removeItem(KEY);
+ const legacyText=localStorage.getItem(KEY);let legacyData=null;
+ if(legacyText){try{const old=JSON.parse(legacyText);if(old&&Array.isArray(old.r))legacyData=fromCloud(old)}catch(e){}}
+ D=await firebase.firestore().runTransaction(async transaction=>{
+  const sharedSnap=await transaction.get(dbRef),userSnap=await transaction.get(userDataRef),migrationSnap=await transaction.get(migrationRef);
+  let sharedData=sharedSnap.exists?fromCloud(sharedSnap.data()):{s:{},r:[],id:1};
+  if(!migrationSnap.exists||!sharedSnap.exists){
+   if(userSnap.exists)sharedData=mergeCloudData(sharedData,fromCloud(userSnap.data()));
+   if(legacyData)sharedData=mergeCloudData(sharedData,legacyData);
+   transaction.set(dbRef,toCloud(sharedData));
+   if(!migrationSnap.exists)transaction.set(migrationRef,{completedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  }
+  return sharedData;
+ });
+ if(legacyText)localStorage.removeItem(KEY);
 }
 async function save(){try{if(!dbRef)throw new Error('Firebase belum siap');await dbRef.set(toCloud());setDbStatus('Data tersimpan di Firebase');return true}catch(e){console.error(e);setDbStatus('Gagal menyimpan ke Firebase: '+e.message,true);alert('Data tidak tersimpan ke Firebase. Periksa koneksi dan aturan Firestore.');return false}}
 
@@ -234,10 +252,10 @@ else try{
  firebase.auth().onAuthStateChanged(async user=>{
   dataReady=false;setControlsEnabled(false);
   $('authEmail').disabled=!!user;$('authPassword').disabled=!!user;$('bLogin').hidden=!!user;$('bLogout').hidden=!user;
-  if(!user){D={s:{},r:[],id:1};dbRef=null;$('bLogin').disabled=false;setDbStatus('Masuk dengan akun Firebase untuk memuat data.');render();return}
-  setDbStatus('Memuat data dari Firebase...');dbRef=firebase.firestore().collection('users').doc(user.uid).collection('app').doc('bmn');
-  try{await loadCloud();dataReady=true;setControlsEnabled(true);setDbStatus('Terhubung ke Firebase sebagai '+user.email);render()}
-  catch(x){console.error(x);const message=x.code==='permission-denied'?'Firestore menolak akses. Atur Rules agar pengguna yang masuk dapat membaca dan menulis dokumen users/{uid}/app/{docId}.':x.message;setDbStatus('Gagal memuat Firebase: '+message,true);render()}
+  if(!user){D={s:{},r:[],id:1};dbRef=null;userDataRef=null;migrationRef=null;$('bLogin').disabled=false;setDbStatus('Masuk dengan akun Firebase untuk memuat data.');render();return}
+  setDbStatus('Memuat data bersama dari Firebase...');const firestore=firebase.firestore();dbRef=firestore.collection('sharedData').doc('bmn');userDataRef=firestore.collection('users').doc(user.uid).collection('app').doc('bmn');migrationRef=firestore.collection('users').doc(user.uid).collection('app').doc('shared-migration');
+  try{await loadCloud();dataReady=true;setControlsEnabled(true);setDbStatus('Terhubung ke data bersama sebagai '+user.email);render()}
+  catch(x){console.error(x);const message=x.code==='permission-denied'?'Akun ini belum terdaftar di sharedMembers/{uid}, atau Firestore Rules belum mengizinkan akses data bersama.':x.message;setDbStatus('Gagal memuat Firebase: '+message,true);render()}
  });
 }catch(x){setDbStatus('Firebase gagal diinisialisasi: '+x.message,true);$('bLogin').disabled=true;render()}
 </script>
