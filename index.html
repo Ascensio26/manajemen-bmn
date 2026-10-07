@@ -142,7 +142,7 @@ function render(){
  $('tb').innerHTML=v.map((r,i)=>`<tr>
   <td>${i+1}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="n">${qty(r)}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td><td>${esc(r[5])}</td>
   <td class="n">${rp(r[6])}</td><td><span class="k k${r[7]}">${KON[r[7]]}</span></td><td>${esc(r[9])}</td><td>${esc(r[10])}</td><td>${esc(r[11])}</td>
-  <td class="no" style="white-space:nowrap"><button class="btn s" data-e="${r[0]}">Ubah</button> <button class="btn s d" data-d="${r[0]}">Hapus</button></td></tr>`).join('');
+  <td class="no row-actions"><button class="btn s" data-e="${r[0]}">Ubah</button> <button class="btn s d" data-d="${r[0]}">Hapus</button></td></tr>`).join('');
  $('tf').innerHTML=v.length?`<tr><td colspan="3">Total</td><td class="n">${v.reduce((a,r)=>a+qty(r),0)}</td><td colspan="3"></td><td class="n">${rp(tot)}</td><td colspan="5"></td></tr>`:'';
  const em=$('empty');em.hidden=v.length>0;
  em.textContent=D.r.length?'Tidak ada barang yang cocok dengan pencarian atau filter.':'Belum ada data. Klik "Tambah barang" untuk memulai.';

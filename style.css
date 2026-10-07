@@ -48,6 +48,7 @@ label input,label select,label textarea{display:block;width:100%;margin-top:3px;
 .db-status.error{color:var(--bd)}
 .act{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
 .po{display:none}
+.row-actions{white-space:nowrap}
 .header-actions{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:560px){.g{grid-template-columns:1fr}}
 @media print{
