@@ -1,0 +1,70 @@
+:root{--ink:#17202e;--mut:#5d6878;--bg:#f2f4f7;--card:#fff;--line:#d6dbe3;--ac:#1d3b6e;--ac2:#e6edf8;--ok:#1f7a4d;--wr:#a86400;--bd:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 "Segoe UI",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+header{background:var(--ac);color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px;font-weight:650}
+header small{opacity:.75;display:block;font-weight:400}
+main{max-width:1280px;margin:0 auto;padding:16px 20px 40px}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--card);padding:7px 12px;border-radius:6px;cursor:pointer}
+.btn:hover{background:var(--ac2)}
+.btn.p{background:var(--ac);border-color:var(--ac);color:#fff}
+.btn.p:hover{background:#16305a}
+header .btn{background:transparent;color:#fff;border-color:#ffffff66}
+header .btn:hover{background:#ffffff22}
+header .btn.p{background:#fff;color:var(--ac);border-color:#fff}
+.btn.s{padding:3px 8px;font-size:12px}
+.btn.d{color:var(--bd)}
+:focus-visible{outline:2px solid #2f6fdb;outline-offset:2px}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.sum div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.sum b{display:block;font-size:19px}
+.sum span{color:var(--mut);font-size:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.bar input,.bar select{padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+.bar input[type=search]{flex:1;min-width:200px}
+.wrap{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#eaeef4;font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+tfoot td{font-weight:650;background:#f7f8fa}
+.k{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;white-space:nowrap}
+.k0{background:#dff3e8;color:var(--ok)}.k1{background:#fdf0d5;color:var(--wr)}.k2{background:#fadcd9;color:var(--bd)}
+.empty{padding:34px 16px;text-align:center;color:var(--mut)}
+.meter{margin-top:14px;color:var(--mut);font-size:12px}
+.meter i{display:block;height:5px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
+.meter i u{display:block;height:100%;background:var(--ac)}
+dialog{border:0;border-radius:10px;padding:0;width:min(640px,94vw);box-shadow:0 10px 40px #0004}
+dialog::backdrop{background:#0006}
+dialog form{padding:18px 20px}
+dialog h2{margin:0 0 12px;font-size:17px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g .f{grid-column:1/-1}
+label{display:block;font-size:12px;color:var(--mut)}
+label input,label select,label textarea{display:block;width:100%;margin-top:3px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;color:var(--ink);background:#fff;font-size:14px}
+.err{color:var(--bd);font-size:13px;min-height:18px;margin-top:8px}
+.db-status{color:var(--mut);font-size:12px;align-self:center}
+.db-status.error{color:var(--bd)}
+.act{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.po{display:none}
+.header-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:560px){.g{grid-template-columns:1fr}}
+@media print{
+ @page{size:A4 landscape;margin:12mm}
+ body{background:#fff;font-size:10.5px}
+ .no{display:none!important}
+ .po{display:block}
+ main{padding:0;max-width:none}
+ .wrap{border:0;overflow:visible}
+ table{min-width:0}
+ th,td{padding:4px 6px;border:1px solid #888}
+ th{background:#e5e5e5!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ tr{break-inside:avoid}
+ .k{padding:0;background:none!important;color:#000!important}
+ .kop{text-align:center;margin-bottom:8px}
+ .kop b{font-size:14px;display:block}
+ .kop h2{margin:6px 0 2px;font-size:13px}
+ .ttd{margin-top:22px;width:260px;margin-left:auto;text-align:center;break-inside:avoid}
+ .ttd div{height:60px}
+}
