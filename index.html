@@ -11,7 +11,7 @@
  <h1>Manajemen BMN<small id="inst">Daftar Barang Milik Negara</small></h1>
  <div class="header-actions">
   <button class="btn p" id="bAdd">+ Tambah barang</button>
-  <button class="btn" id="bPrint">Cetak / Simpan PDF</button>
+  <button class="btn" id="bPrint">Simpan PDF</button>
   <button class="btn" id="bCsv">Ekspor CSV</button>
   <button class="btn" id="bBak">Cadangkan</button>
   <button class="btn" id="bRes">Pulihkan</button>
@@ -97,6 +97,8 @@
  </form>
 </dialog>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -109,7 +111,7 @@ const KON=['Baik','Rusak Ringan','Rusak Berat'];
    [id, kode, nup, nama, merek, tahun, nilai, kondisi(0-2), kategori(0-5), lokasi, pj, ket, jumlah]
    Kondisi dan kategori disimpan sebagai angka kode, teksnya diambil dari daftar di atas. */
 let D={s:{},r:[],id:1};
-let dbRef=null,userDataRef=null,migrationRef=null,dataReady=false;
+let dbRef=null,userDataRef=null,migrationRef=null,sharedUnsubscribe=null,dataReady=false;
 const $=i=>document.getElementById(i);
 const rp=n=>new Intl.NumberFormat('id-ID').format(n||0);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -135,17 +137,33 @@ async function loadCloud(){
  D=await firebase.firestore().runTransaction(async transaction=>{
   const sharedSnap=await transaction.get(dbRef),userSnap=await transaction.get(userDataRef),migrationSnap=await transaction.get(migrationRef);
   let sharedData=sharedSnap.exists?fromCloud(sharedSnap.data()):{s:{},r:[],id:1};
-  if(!migrationSnap.exists||!sharedSnap.exists){
-   if(userSnap.exists)sharedData=mergeCloudData(sharedData,fromCloud(userSnap.data()));
-   if(legacyData)sharedData=mergeCloudData(sharedData,legacyData);
-   transaction.set(dbRef,toCloud(sharedData));
+  const mergedData=mergeCloudData({s:{},r:[],id:1},sharedData);
+  if(!migrationSnap.exists){
+   if(userSnap.exists)mergeCloudData(mergedData,fromCloud(userSnap.data()));
+  }
+  if(legacyData)mergeCloudData(mergedData,legacyData);
+  if(!sharedSnap.exists||!migrationSnap.exists||legacyData){
+   transaction.set(dbRef,toCloud(mergedData));
    if(!migrationSnap.exists)transaction.set(migrationRef,{completedAt:firebase.firestore.FieldValue.serverTimestamp()});
   }
-  return sharedData;
+  return mergedData;
  });
  if(legacyText)localStorage.removeItem(KEY);
+ return D;
 }
-async function save(){try{if(!dbRef)throw new Error('Firebase belum siap');await dbRef.set(toCloud());setDbStatus('Data tersimpan di Firebase');return true}catch(e){console.error(e);setDbStatus('Gagal menyimpan ke Firebase: '+e.message,true);alert('Data tidak tersimpan ke Firebase. Periksa koneksi dan aturan Firestore.');return false}}
+async function save(){
+ try{
+  if(!dbRef)throw new Error('Firebase belum siap');
+  await dbRef.set(toCloud());
+  setDbStatus('Data tersimpan di Firebase');
+  return true;
+ }catch(e){
+  console.error(e);
+  setDbStatus('Gagal menyimpan ke Firebase: '+e.message,true);
+  alert('Data tidak tersimpan ke Firebase. Periksa koneksi dan aturan Firestore.');
+  return false;
+ }
+}
 
 function fill(sel,arr,all){sel.innerHTML=(all?`<option value="">${all}</option>`:'')+arr.map((t,i)=>`<option value="${i}">${t}</option>`).join('')}
 fill($('fc'),KAT,'Semua kategori');fill($('fk'),KON,'Semua kondisi');fill($('kat'),KAT);fill($('kon'),KON);
@@ -202,15 +220,34 @@ $('bSet').onclick=()=>{const s=D.s;$('sN').value=s.n||'';$('sU').value=s.u||'';$
 $('sCancel').onclick=()=>$('dlgS').close();
 $('frmS').addEventListener('submit',async e=>{e.preventDefault();if(!dataReady)return;const backup=JSON.stringify(D);D.s={n:$('sN').value.trim(),u:$('sU').value.trim(),t:$('sT').value.trim(),j:$('sJ').value.trim(),p:$('sP').value.trim()};if(await save()){$('dlgS').close();render()}else{D=JSON.parse(backup);render()}});
 
-/* Cetak / PDF */
+/* PDF */
 $('bPrint').onclick=()=>{
- const s=D.s,v=view(),tgl=new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+ const s=D.s,v=view();
+ if(!v.length){alert('Tidak ada data untuk disimpan sebagai PDF.');return}
+ if(!window.jspdf || !window.jspdf.jsPDF){alert('Library PDF gagal dimuat. Coba refresh halaman.');return}
+ const tgl=new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
  const f=[];if($('fc').value!=='')f.push(KAT[$('fc').value]);if($('fk').value!=='')f.push('Kondisi '+KON[$('fk').value]);if($('q').value.trim())f.push('Pencarian "'+$('q').value.trim()+'"');
- $('pInst').textContent=s.n||'';$('pUnit').textContent=s.u||'';
- $('pInfo').textContent='Per '+tgl+(f.length?' · '+f.join(', '):'')+' · '+v.length+' barang';
- $('pTempat').textContent=(s.t?s.t+', ':'')+tgl;$('pJab').textContent=s.j||'';$('pNama').textContent=s.p||'';
- if(!v.length){alert('Tidak ada data untuk dicetak.');return}
- window.print();
+ const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+ const rows=v.map((r,i)=>[i+1,r[1],r[2],r[12]||1,r[3],r[4],r[5],r[6],KON[r[7]],KAT[r[8]],r[9],r[10],r[11]]);
+ doc.setFontSize(16);doc.setTextColor(29,59,110);doc.text(s.n||'Daftar Barang Milik Negara',14,16);
+ doc.setFontSize(10);doc.setTextColor(60,60,60);doc.text(s.u||'',14,22);
+ doc.text('Per '+tgl+(f.length?' · '+f.join(', '):'')+' · '+v.length+' barang',14,28);
+ doc.autoTable({
+  startY:36,
+  head:[[ 'No','Kode Barang','NUP','Jumlah','Nama Barang','Merek / Tipe','Tahun','Nilai Perolehan (Rp)','Kondisi','Kategori','Lokasi','Penanggung Jawab','Keterangan' ]],
+  body:rows,
+  theme:'grid',
+  styles:{fontSize:7,cellPadding:2,overflow:'linebreak',valign:'middle'},
+  headStyles:{fillColor:[29,59,110],textColor:[255,255,255],fontStyle:'bold'},
+  alternateRowStyles:{fillColor:[240,244,250]},
+  columnStyles:{
+   0:{cellWidth:10},1:{cellWidth:18},2:{cellWidth:15},3:{cellWidth:12},4:{cellWidth:28},5:{cellWidth:20},6:{cellWidth:12},7:{cellWidth:26},8:{cellWidth:18},9:{cellWidth:25},10:{cellWidth:20},11:{cellWidth:24},12:{cellWidth:26}
+  },
+  margin:{left:10,right:10}
+ });
+ const finalY=(doc.lastAutoTable&&doc.lastAutoTable.finalY)?doc.lastAutoTable.finalY:60;
+ if((s.t||s.j||s.p)){doc.setFontSize(10);doc.setTextColor(30,30,30);const signY=finalY+16;doc.text((s.t?s.t+', ':'')+tgl, 220, signY);doc.text(s.j||'', 220, signY+6);doc.text(s.p||'', 220, signY+18);}
+ doc.save('bmn-'+stamp()+'.pdf');
 };
 
 /* Ekspor CSV */
@@ -250,11 +287,20 @@ if(!Object.values(firebaseConfig).every(v=>v&&!v.startsWith('YOUR_'))){$('bLogin
 else try{
  firebase.initializeApp(firebaseConfig);
  firebase.auth().onAuthStateChanged(async user=>{
+  if(sharedUnsubscribe){sharedUnsubscribe();sharedUnsubscribe=null}
   dataReady=false;setControlsEnabled(false);
   $('authEmail').disabled=!!user;$('authPassword').disabled=!!user;$('bLogin').hidden=!!user;$('bLogout').hidden=!user;
   if(!user){D={s:{},r:[],id:1};dbRef=null;userDataRef=null;migrationRef=null;$('bLogin').disabled=false;setDbStatus('Masuk dengan akun Firebase untuk memuat data.');render();return}
   setDbStatus('Memuat data bersama dari Firebase...');const firestore=firebase.firestore();dbRef=firestore.collection('sharedData').doc('bmn');userDataRef=firestore.collection('users').doc(user.uid).collection('app').doc('bmn');migrationRef=firestore.collection('users').doc(user.uid).collection('app').doc('shared-migration');
-  try{await loadCloud();dataReady=true;setControlsEnabled(true);setDbStatus('Terhubung ke data bersama sebagai '+user.email);render()}
+  try{
+   await loadCloud();dataReady=true;setControlsEnabled(true);setDbStatus('Terhubung ke data bersama sebagai '+user.email);render();
+   sharedUnsubscribe=dbRef.onSnapshot(snapshot=>{
+    if(!snapshot.exists)return;
+    D=fromCloud(snapshot.data());render();
+   },error=>{
+    console.error(error);setDbStatus('Gagal menerima pembaruan bersama: '+error.message,true);
+   });
+  }
   catch(x){console.error(x);const message=x.code==='permission-denied'?'Akun ini belum terdaftar di sharedMembers/{uid}, atau Firestore Rules belum mengizinkan akses data bersama.':x.message;setDbStatus('Gagal memuat Firebase: '+message,true);render()}
  });
 }catch(x){setDbStatus('Firebase gagal diinisialisasi: '+x.message,true);$('bLogin').disabled=true;render()}
